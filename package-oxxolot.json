@@ -1,0 +1,9 @@
+{
+  "name": "oxxolot",
+  "version": "1.0.0",
+  "description": "Oxxolot - AI chat CLI dual-model (OpenRouter)",
+  "main": "index-oxxolot.js",
+  "scripts": {
+    "start": "node index-oxxolot.js"
+  }
+}
