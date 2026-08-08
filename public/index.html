@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Oxxolot — AI Dual-Otak</title>
+<meta name="theme-color" content="#0B1614" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <g class="gills gills-left">
+            <ellipse cx="14" cy="38" rx="7" ry="11"/>
+            <ellipse cx="14" cy="50" rx="7" ry="11"/>
+            <ellipse cx="14" cy="62" rx="7" ry="11"/>
+          </g>
+          <g class="gills gills-right">
+            <ellipse cx="86" cy="38" rx="7" ry="11"/>
+            <ellipse cx="86" cy="50" rx="7" ry="11"/>
+            <ellipse cx="86" cy="62" rx="7" ry="11"/>
+          </g>
+          <ellipse class="head" cx="50" cy="50" rx="26" ry="19"/>
+          <circle class="eye" cx="41" cy="47" r="2.6"/>
+          <circle class="eye" cx="59" cy="47" r="2.6"/>
+        </svg>
+        <div>
+          <div class="brand-name">Oxxolot</div>
+          <div class="brand-tag">dua otak, satu axolotl</div>
+        </div>
+      </div>
+
+      <button class="new-chat" id="newChatBtn">+ Obrolan baru</button>
+
+      <nav class="session-list" id="sessionList" aria-label="Riwayat obrolan"></nav>
+
+      <div class="sidebar-footer">
+        <button class="ghost-btn" id="clearAllBtn">Hapus semua riwayat</button>
+      </div>
+    </aside>
+
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn" id="menuBtn" aria-label="Buka menu">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+
+        <div class="mode-switch" role="tablist" aria-label="Mode AI">
+          <button class="mode-pill" data-mode="otak" role="tab" aria-selected="true">
+            <span class="mode-icon">🧠</span> Otak
+          </button>
+          <button class="mode-pill" data-mode="koding" role="tab" aria-selected="false">
+            <span class="mode-icon">💻</span> Koding
+          </button>
+        </div>
+
+        <button class="icon-btn" id="resetBtn" aria-label="Reset obrolan mode ini" title="Reset mode ini">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </header>
+
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-inner" id="chatInner">
+          <div class="empty-state" id="emptyState">
+            <svg class="empty-mark" viewBox="0 0 100 100" aria-hidden="true">
+              <g class="gills gills-left"><ellipse cx="14" cy="38" rx="7" ry="11"/><ellipse cx="14" cy="50" rx="7" ry="11"/><ellipse cx="14" cy="62" rx="7" ry="11"/></g>
+              <g class="gills gills-right"><ellipse cx="86" cy="38" rx="7" ry="11"/><ellipse cx="86" cy="50" rx="7" ry="11"/><ellipse cx="86" cy="62" rx="7" ry="11"/></g>
+              <ellipse class="head" cx="50" cy="50" rx="26" ry="19"/>
+              <circle class="eye" cx="41" cy="47" r="2.6"/><circle class="eye" cx="59" cy="47" r="2.6"/>
+            </svg>
+            <h1>Halo, aku Oxxolot 👋</h1>
+            <p id="emptyDesc">Mode <b>Otak</b> aktif — buat mikir & bedah masalah. Ketik apa aja di bawah.</p>
+          </div>
+        </div>
+      </div>
+
+      <form class="composer" id="composerForm">
+        <textarea id="composerInput" rows="1" placeholder="Tanya Oxxolot..." aria-label="Tulis pesan"></textarea>
+        <button type="submit" class="send-btn" id="sendBtn" aria-label="Kirim">
+          <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg>
+        </button>
+      </form>
+      <div class="composer-hint" id="composerHint">Model: —</div>
+    </main>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
