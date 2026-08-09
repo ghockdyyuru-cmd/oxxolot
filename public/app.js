@@ -22,6 +22,11 @@
     form: document.getElementById('composerForm'),
     input: document.getElementById('composerInput'),
     browseToggle: document.getElementById('browseToggle'),
+    attachBtn: document.getElementById('attachBtn'),
+    attachInput: document.getElementById('attachInput'),
+    attachPreview: document.getElementById('attachPreview'),
+    attachPreviewImg: document.getElementById('attachPreviewImg'),
+    attachRemoveBtn: document.getElementById('attachRemoveBtn'),
     sendBtn: document.getElementById('sendBtn'),
     hint: document.getElementById('composerHint')
   };
@@ -30,13 +35,67 @@
   let sessions = loadSessions();
   let currentId = sessions.length ? sessions[0].id : createSession('otak');
   let mode = getSession(currentId).mode;
-  let sending = false;
+  const sendingSessions = new Set(); // per-sesi, biar bisa "multitasking" antar obrolan
   let browsingOn = false;
+  let pendingImage = null; // { dataUrl, } hasil kompres
 
   el.browseToggle.addEventListener('click', () => {
     browsingOn = !browsingOn;
     el.browseToggle.setAttribute('aria-pressed', String(browsingOn));
   });
+
+  el.attachBtn.addEventListener('click', () => {
+    if (mode !== 'otak') {
+      alert('Kirim gambar cuma bisa di mode Otak (model Koding belum bisa lihat gambar).');
+      return;
+    }
+    el.attachInput.click();
+  });
+
+  el.attachInput.addEventListener('change', async () => {
+    const file = el.attachInput.files?.[0];
+    el.attachInput.value = '';
+    if (!file) return;
+    try {
+      pendingImage = await compressImageToDataUrl(file);
+      el.attachPreviewImg.src = pendingImage;
+      el.attachPreview.hidden = false;
+    } catch {
+      alert('Gagal memproses gambar. Coba gambar lain.');
+    }
+  });
+
+  el.attachRemoveBtn.addEventListener('click', () => {
+    pendingImage = null;
+    el.attachPreview.hidden = true;
+    el.attachPreviewImg.src = '';
+  });
+
+  function compressImageToDataUrl(file, maxDim = 1024, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   // ---------- persistence ----------
   function loadSessions() {
@@ -76,6 +135,7 @@
     currentId = createSession(mode);
     renderSessionList();
     renderMessages();
+    updateSendButtonUI();
     el.app.classList.remove('sidebar-open');
   });
 
@@ -93,9 +153,11 @@
     sessions.forEach((s) => {
       const item = document.createElement('div');
       item.className = 's-item session-item' + (s.id === currentId ? ' active' : '');
+      const busy = sendingSessions.has(s.id) ? '<span class="s-busy" title="Masih diproses"></span>' : '';
       item.innerHTML = `
         <span class="s-icon">${MODE_META[s.mode]?.icon ?? '💬'}</span>
         <span class="s-title">${escapeHtml(s.title)}</span>
+        ${busy}
         <button class="s-del" title="Hapus obrolan ini" aria-label="Hapus obrolan ini">✕</button>
       `;
       item.addEventListener('click', (e) => {
@@ -104,6 +166,8 @@
         applyMode(s.mode, { silent: true });
         renderSessionList();
         renderMessages();
+        reflectSendingState(currentId);
+        updateSendButtonUI();
         el.app.classList.remove('sidebar-open');
       });
       item.querySelector('.s-del').addEventListener('click', () => {
@@ -114,6 +178,8 @@
         applyMode(getSession(currentId).mode, { silent: true });
         renderSessionList();
         renderMessages();
+        reflectSendingState(currentId);
+        updateSendButtonUI();
       });
       el.sessionList.appendChild(item);
     });
@@ -194,10 +260,14 @@
   el.form.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = el.input.value.trim();
-    if (!text || sending) return;
+    if ((!text && !pendingImage) || sendingSessions.has(currentId)) return;
     el.input.value = '';
     el.input.style.height = 'auto';
-    sendMessage(text);
+    const image = pendingImage;
+    pendingImage = null;
+    el.attachPreview.hidden = true;
+    el.attachPreviewImg.src = '';
+    sendMessage(text, image);
   });
 
   // ---------- rendering ----------
@@ -223,6 +293,7 @@
   function renderMessage(m) {
     const wrap = document.createElement('div');
     wrap.className = `msg ${m.role}`;
+    if (m.id) wrap.dataset.msgId = m.id;
     const avatar = m.role === 'user' ? '🙂' : MASCOT_SVG;
     wrap.innerHTML = `
       <div class="msg-avatar">${avatar}</div>
@@ -234,6 +305,22 @@
     const content = wrap.querySelector('.msg-content');
     if (m.role === 'assistant') {
       renderMarkdown(content, m.content || '');
+    } else if (Array.isArray(m.content)) {
+      content.style.whiteSpace = 'pre-wrap';
+      const textPart = m.content.find((c) => c.type === 'text')?.text || '';
+      const imagePart = m.content.find((c) => c.type === 'image_url');
+      if (textPart) {
+        const p = document.createElement('div');
+        p.textContent = textPart;
+        content.appendChild(p);
+      }
+      if (imagePart) {
+        const img = document.createElement('img');
+        img.src = imagePart.image_url.url;
+        img.className = 'msg-image';
+        img.alt = 'Gambar terkirim';
+        content.appendChild(img);
+      }
     } else {
       content.textContent = m.content;
       content.style.whiteSpace = 'pre-wrap';
@@ -269,35 +356,43 @@
   }
 
   // ---------- chat send (streaming) ----------
-  async function sendMessage(text) {
-    const s = getSession(currentId);
-    s.messages.push({ role: 'user', content: text });
-    if (s.messages.length === 1) s.title = text.slice(0, 40);
+  async function sendMessage(text, image) {
+    const sessionId = currentId; // kunci ke sesi ini, biar gak ketuker kalau user pindah sesi
+    const s = getSession(sessionId);
+    const userContent = image
+      ? [
+          ...(text ? [{ type: 'text', text }] : []),
+          { type: 'image_url', image_url: { url: image } }
+        ]
+      : text;
+    s.messages.push({ role: 'user', content: userContent });
+    if (s.messages.length === 1) s.title = (text || '📷 Gambar').slice(0, 40);
     saveSessions();
     renderSessionList();
-    renderMessages();
+    if (currentId === sessionId) renderMessages();
 
-    sending = true;
-    el.sendBtn.disabled = true;
+    sendingSessions.add(sessionId);
+    updateSendButtonUI();
 
-    const assistantMsg = { role: 'assistant', content: '' };
+    const assistantMsg = { id: uid(), role: 'assistant', content: '' };
     s.messages.push(assistantMsg);
-    const bubble = renderMessage(assistantMsg);
-    el.chatInner.appendChild(bubble);
-    const contentEl = bubble.querySelector('.msg-content');
-    const mascotEl = bubble.querySelector('.msg-avatar-mascot');
-    mascotEl?.classList.add('is-thinking');
-    contentEl.innerHTML = browsingOn
-      ? '<span class="searching-label">🌐 Mencari di web...</span>'
-      : '<span class="typing-dots"><span></span><span></span><span></span></span>';
-    scrollToBottom();
+
+    if (currentId === sessionId) {
+      const bubble = renderMessage(assistantMsg);
+      el.chatInner.appendChild(bubble);
+      liveSet(assistantMsg.id, browsingOn
+        ? '<span class="searching-label">🌐 Mencari di web...</span>'
+        : '<span class="typing-dots"><span></span><span></span><span></span></span>');
+      liveMascot(assistantMsg.id, true);
+      scrollToBottom();
+    }
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode,
+          mode: s.mode,
           browsing: browsingOn,
           messages: s.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
         })
@@ -329,29 +424,78 @@
             const json = JSON.parse(dataStr);
             const delta = json.choices?.[0]?.delta?.content;
             if (delta) {
-              if (firstChunk) { contentEl.innerHTML = ''; firstChunk = false; }
               assistantMsg.content += delta;
-              renderMarkdown(contentEl, assistantMsg.content);
-              scrollToBottom();
+              if (firstChunk) { firstChunk = false; }
+              if (currentId === sessionId) {
+                liveSet(assistantMsg.id, renderMarkdownStr(assistantMsg.content));
+                scrollToBottom();
+              }
             }
           } catch { /* lewati baris SSE yang gak lengkap */ }
         }
       }
 
       if (!assistantMsg.content) {
-        contentEl.innerHTML = '<div class="error-bubble">Gak ada jawaban yang diterima. Coba lagi ya.</div>';
+        if (currentId === sessionId) liveSet(assistantMsg.id, '<div class="error-bubble">Gak ada jawaban yang diterima. Coba lagi ya.</div>');
         s.messages.pop();
       }
     } catch (err) {
-      contentEl.innerHTML = `<div class="error-bubble">⚠️ ${escapeHtml(err.message || 'Gagal terhubung ke server.')}</div>`;
+      if (currentId === sessionId) {
+        liveSet(assistantMsg.id, `<div class="error-bubble">⚠️ ${escapeHtml(err.message || 'Gagal terhubung ke server.')}</div>`);
+      }
       s.messages.pop();
     } finally {
-      mascotEl?.classList.remove('is-thinking');
+      if (currentId === sessionId) liveMascot(assistantMsg.id, false);
       saveSessions();
       renderSessionList();
-      sending = false;
-      el.sendBtn.disabled = false;
+      sendingSessions.delete(sessionId);
+      updateSendButtonUI();
     }
+  }
+
+  function uid() {
+    return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now());
+  }
+
+  function renderMarkdownStr(text) {
+    const raw = window.marked ? window.marked.parse(text) : text;
+    return window.DOMPurify ? window.DOMPurify.sanitize(raw) : raw;
+  }
+
+  function liveSet(msgId, html) {
+    const contentEl = document.querySelector(`[data-msg-id="${msgId}"] .msg-content`);
+    if (!contentEl) return;
+    contentEl.innerHTML = html;
+    contentEl.querySelectorAll('pre').forEach((pre) => {
+      if (pre.classList.contains('code-block')) return;
+      pre.classList.add('code-block');
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'Salin';
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(pre.innerText).then(() => {
+          btn.textContent = 'Tersalin!';
+          setTimeout(() => (btn.textContent = 'Salin'), 1200);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  }
+
+  function liveMascot(msgId, isThinking) {
+    const mascotEl = document.querySelector(`[data-msg-id="${msgId}"] .msg-avatar-mascot`);
+    mascotEl?.classList.toggle('is-thinking', isThinking);
+  }
+
+  function updateSendButtonUI() {
+    el.sendBtn.disabled = sendingSessions.has(currentId);
+  }
+
+  function reflectSendingState(id) {
+    if (!sendingSessions.has(id)) return;
+    const s = getSession(id);
+    const last = s?.messages[s.messages.length - 1];
+    if (last?.role === 'assistant') liveMascot(last.id, true);
   }
 
   // ---------- PWA service worker ----------

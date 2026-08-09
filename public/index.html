@@ -90,10 +90,18 @@
         </div>
       </div>
 
+      <div class="attach-preview" id="attachPreview" hidden>
+        <img id="attachPreviewImg" alt="Preview gambar" />
+        <button type="button" id="attachRemoveBtn" aria-label="Hapus gambar">✕</button>
+      </div>
       <form class="composer" id="composerForm">
         <button type="button" class="browse-toggle" id="browseToggle" aria-pressed="false" title="Aktifkan pencarian web">
           🌐
         </button>
+        <button type="button" class="browse-toggle" id="attachBtn" title="Kirim gambar (mode Otak)">
+          🖼️
+        </button>
+        <input type="file" id="attachInput" accept="image/*" hidden />
         <textarea id="composerInput" rows="1" placeholder="Tanya Oxxolot..." aria-label="Tulis pesan"></textarea>
         <button type="submit" class="send-btn" id="sendBtn" aria-label="Kirim">
           <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg>

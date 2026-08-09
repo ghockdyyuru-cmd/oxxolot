@@ -35,7 +35,7 @@ async function webSearch(query, limit = 5) {
 }
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- Konfigurasi ----------
@@ -44,13 +44,14 @@ const API_KEY = process.env.OPENROUTER_API_KEY || '';
 const BOT_NAME = process.env.BOT_NAME || 'Oxxolot';
 
 const MODELS = {
-  otak: process.env.MODEL_OTAK || 'nvidia/nemotron-3-ultra-550b-a55b:free',
-  koding: process.env.MODEL_KODING || 'poolside/laguna-s-2.1:free'
+  otak: process.env.MODEL_OTAK || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  koding: process.env.MODEL_KODING || 'openai/gpt-oss-20b:free'
 };
 
 const SYSTEM_PROMPTS = {
   otak:
-    'Kamu adalah Oxxolot, asisten AI yang jago memecahkan masalah kompleks. Gaya bicaramu ' +
+    'Kamu adalah Oxxolot, asisten AI yang jago memecahkan masalah kompleks dan bisa menganalisis gambar yang ' +
+    'dikirim user (deskripsikan apa yang kamu lihat sebelum menjawab kalau ada gambar). Gaya bicaramu ' +
     'profesional tapi padat — langsung ke inti, tanpa basa-basi pembuka atau penutup generik. ' +
     'Aturan jawab: (1) jawab poin penting duluan, baru detail pendukung kalau perlu, (2) pakai ' +
     'daftar/poin buat hal yang punya banyak bagian, bukan paragraf panjang, (3) kalau ada asumsi ' +
@@ -136,9 +137,14 @@ app.post('/api/chat', async (req, res) => {
 
   if (browsing) {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    if (lastUser?.content) {
+    const queryText = typeof lastUser?.content === 'string'
+      ? lastUser.content
+      : Array.isArray(lastUser?.content)
+        ? lastUser.content.find((c) => c.type === 'text')?.text
+        : null;
+    if (queryText) {
       try {
-        const results = await webSearch(lastUser.content);
+        const results = await webSearch(queryText);
         if (results.length) {
           const context = results
             .map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\nSumber: ${r.url}`)
@@ -146,7 +152,7 @@ app.post('/api/chat', async (req, res) => {
           payloadMessages.push({
             role: 'system',
             content:
-              `Hasil pencarian web terkini untuk pertanyaan user (query: "${lastUser.content}"):\n\n${context}\n\n` +
+              `Hasil pencarian web terkini untuk pertanyaan user (query: "${queryText}"):\n\n${context}\n\n` +
               'Gunakan informasi di atas untuk menjawab secara akurat dan terkini. Sebutkan sumber secara singkat ' +
               'kalau relevan. Kalau hasil pencarian tidak relevan atau tidak cukup, katakan itu dengan jujur.'
           });
