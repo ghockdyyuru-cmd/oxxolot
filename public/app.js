@@ -175,10 +175,18 @@
     scrollToBottom();
   }
 
+  const MASCOT_SVG = `
+    <svg class="msg-avatar-mascot" viewBox="0 0 100 100" aria-hidden="true">
+      <g class="gills gills-left"><ellipse cx="14" cy="38" rx="7" ry="11"/><ellipse cx="14" cy="50" rx="7" ry="11"/><ellipse cx="14" cy="62" rx="7" ry="11"/></g>
+      <g class="gills gills-right"><ellipse cx="86" cy="38" rx="7" ry="11"/><ellipse cx="86" cy="50" rx="7" ry="11"/><ellipse cx="86" cy="62" rx="7" ry="11"/></g>
+      <ellipse class="head" cx="50" cy="50" rx="26" ry="19"/>
+      <circle class="eye" cx="41" cy="47" r="2.6"/><circle class="eye" cx="59" cy="47" r="2.6"/>
+    </svg>`;
+
   function renderMessage(m) {
     const wrap = document.createElement('div');
     wrap.className = `msg ${m.role}`;
-    const avatar = m.role === 'user' ? '🙂' : MODE_META[mode].icon;
+    const avatar = m.role === 'user' ? '🙂' : MASCOT_SVG;
     wrap.innerHTML = `
       <div class="msg-avatar">${avatar}</div>
       <div class="msg-body">
@@ -240,6 +248,8 @@
     const bubble = renderMessage(assistantMsg);
     el.chatInner.appendChild(bubble);
     const contentEl = bubble.querySelector('.msg-content');
+    const mascotEl = bubble.querySelector('.msg-avatar-mascot');
+    mascotEl?.classList.add('is-thinking');
     contentEl.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
     scrollToBottom();
 
@@ -296,6 +306,7 @@
       contentEl.innerHTML = `<div class="error-bubble">⚠️ ${escapeHtml(err.message || 'Gagal terhubung ke server.')}</div>`;
       s.messages.pop();
     } finally {
+      mascotEl?.classList.remove('is-thinking');
       saveSessions();
       renderSessionList();
       sending = false;
