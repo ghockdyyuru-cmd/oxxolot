@@ -1,6 +1,39 @@
 const express = require('express');
 const path = require('path');
 
+// ---------- Web search (DuckDuckGo HTML, gratis tanpa API key) ----------
+async function webSearch(query, limit = 5) {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+    }
+  });
+  if (!res.ok) throw new Error(`Pencarian gagal (HTTP ${res.status})`);
+  const html = await res.text();
+
+  const results = [];
+  const blockRe = /<a rel="nofollow" class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+  let match;
+  const stripTags = (s) => s.replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+  const cleanUrl = (raw) => {
+    try {
+      const u = new URL(raw, 'https://duckduckgo.com');
+      const real = u.searchParams.get('uddg');
+      return real ? decodeURIComponent(real) : raw;
+    } catch { return raw; }
+  };
+
+  while ((match = blockRe.exec(html)) && results.length < limit) {
+    results.push({
+      title: stripTags(match[2]),
+      url: cleanUrl(match[1]),
+      snippet: stripTags(match[3])
+    });
+  }
+  return results;
+}
+
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -84,15 +117,42 @@ app.post('/api/chat', async (req, res) => {
     return res.status(429).json({ error: 'Kebanyakan request, coba lagi sebentar lagi.' });
   }
 
-  const { mode, messages } = req.body || {};
+  const { mode, messages, browsing } = req.body || {};
   if (!MODELS[mode] || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Request tidak valid.' });
   }
 
   const payloadMessages = [
-    { role: 'system', content: SYSTEM_PROMPTS[mode] },
-    ...messages.slice(-30) // batasi konteks biar hemat token
+    { role: 'system', content: SYSTEM_PROMPTS[mode] }
   ];
+
+  if (browsing) {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUser?.content) {
+      try {
+        const results = await webSearch(lastUser.content);
+        if (results.length) {
+          const context = results
+            .map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\nSumber: ${r.url}`)
+            .join('\n\n');
+          payloadMessages.push({
+            role: 'system',
+            content:
+              `Hasil pencarian web terkini untuk pertanyaan user (query: "${lastUser.content}"):\n\n${context}\n\n` +
+              'Gunakan informasi di atas untuk menjawab secara akurat dan terkini. Sebutkan sumber secara singkat ' +
+              'kalau relevan. Kalau hasil pencarian tidak relevan atau tidak cukup, katakan itu dengan jujur.'
+          });
+        }
+      } catch (err) {
+        payloadMessages.push({
+          role: 'system',
+          content: `Catatan: pencarian web gagal dilakukan (${err.message}). Jawab semampunya tanpa info terkini, dan beri tahu user kalau info yang kamu berikan mungkin bukan yang terbaru.`
+        });
+      }
+    }
+  }
+
+  payloadMessages.push(...messages.slice(-30)); // batasi konteks biar hemat token
 
   try {
     const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {

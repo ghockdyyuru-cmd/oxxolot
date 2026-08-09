@@ -20,6 +20,7 @@
     emptyDesc: document.getElementById('emptyDesc'),
     form: document.getElementById('composerForm'),
     input: document.getElementById('composerInput'),
+    browseToggle: document.getElementById('browseToggle'),
     sendBtn: document.getElementById('sendBtn'),
     hint: document.getElementById('composerHint')
   };
@@ -29,6 +30,12 @@
   let currentId = sessions.length ? sessions[0].id : createSession('otak');
   let mode = getSession(currentId).mode;
   let sending = false;
+  let browsingOn = false;
+
+  el.browseToggle.addEventListener('click', () => {
+    browsingOn = !browsingOn;
+    el.browseToggle.setAttribute('aria-pressed', String(browsingOn));
+  });
 
   // ---------- persistence ----------
   function loadSessions() {
@@ -250,7 +257,9 @@
     const contentEl = bubble.querySelector('.msg-content');
     const mascotEl = bubble.querySelector('.msg-avatar-mascot');
     mascotEl?.classList.add('is-thinking');
-    contentEl.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    contentEl.innerHTML = browsingOn
+      ? '<span class="searching-label">🌐 Mencari di web...</span>'
+      : '<span class="typing-dots"><span></span><span></span><span></span></span>';
     scrollToBottom();
 
     try {
@@ -259,6 +268,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode,
+          browsing: browsingOn,
           messages: s.messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
         })
       });
