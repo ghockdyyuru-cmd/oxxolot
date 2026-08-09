@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Percakapan Oxxolot</title>
+<meta name="theme-color" content="#0A0A0A" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="stylesheet" href="/style.css" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  body { display: flex; justify-content: center; }
+  .share-wrap { max-width: 760px; width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
+  .share-header {
+    display: flex; align-items: center; gap: 10px; padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .share-header .brand-mark { width: 32px; height: 32px; }
+  .share-title { font-family: var(--font-display); font-weight: 650; font-size: 16px; }
+  .share-sub { font-size: 11.5px; color: var(--text-muted); }
+  .share-cta {
+    margin-left: auto; background: var(--pink); color: var(--bg-deep); border: none;
+    padding: 9px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; text-decoration: none;
+  }
+  .share-body { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 18px; }
+  .share-footer { text-align: center; padding: 18px; color: var(--text-muted); font-size: 12px; }
+  .share-loading, .share-error { text-align: center; padding: 15vh 20px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="share-wrap">
+    <header class="share-header">
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <g class="gills gills-left"><ellipse cx="14" cy="38" rx="7" ry="11"/><ellipse cx="14" cy="50" rx="7" ry="11"/><ellipse cx="14" cy="62" rx="7" ry="11"/></g>
+        <g class="gills gills-right"><ellipse cx="86" cy="38" rx="7" ry="11"/><ellipse cx="86" cy="50" rx="7" ry="11"/><ellipse cx="86" cy="62" rx="7" ry="11"/></g>
+        <ellipse class="head" cx="50" cy="50" rx="26" ry="19"/>
+        <circle class="eye" cx="41" cy="47" r="2.6"/><circle class="eye" cx="59" cy="47" r="2.6"/>
+      </svg>
+      <div>
+        <div class="share-title" id="shareTitle">Percakapan Oxxolot</div>
+        <div class="share-sub">Dibagikan &middot; hanya-baca</div>
+      </div>
+      <a class="share-cta" href="/">Buka Oxxolot</a>
+    </header>
+    <div class="share-body" id="shareBody">
+      <div class="share-loading">Memuat percakapan...</div>
+    </div>
+    <div class="share-footer">Dibuat dengan Oxxolot 🩷</div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script>
+(() => {
+  const id = location.pathname.split('/').filter(Boolean).pop();
+  const body = document.getElementById('shareBody');
+  const titleEl = document.getElementById('shareTitle');
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderMarkdown(text) {
+    const raw = window.marked ? window.marked.parse(text) : text;
+    return window.DOMPurify ? window.DOMPurify.sanitize(raw) : raw;
+  }
+
+  fetch(`/api/share/${id}`)
+    .then((r) => { if (!r.ok) throw new Error('not found'); return r.json(); })
+    .then((data) => {
+      titleEl.textContent = data.title || 'Percakapan Oxxolot';
+      document.title = `${data.title || 'Percakapan'} — Oxxolot`;
+      body.innerHTML = '';
+      data.messages.forEach((m) => {
+        const wrap = document.createElement('div');
+        wrap.className = `msg ${m.role}`;
+        const icon = m.role === 'user' ? '🙂' : (data.mode === 'koding' ? '💻' : '🧠');
+        wrap.innerHTML = `
+          <div class="msg-avatar">${icon}</div>
+          <div class="msg-body">
+            <div class="msg-meta">${m.role === 'user' ? 'User' : (data.botName || 'Oxxolot')}</div>
+            <div class="msg-content"></div>
+          </div>`;
+        const content = wrap.querySelector('.msg-content');
+        if (m.role === 'assistant') {
+          content.innerHTML = renderMarkdown(m.content);
+        } else {
+          content.textContent = m.content;
+          content.style.whiteSpace = 'pre-wrap';
+        }
+        body.appendChild(wrap);
+      });
+    })
+    .catch(() => {
+      body.innerHTML = '<div class="share-error">Percakapan tidak ditemukan atau sudah kadaluarsa.</div>';
+    });
+})();
+</script>
+</body>
+</html>

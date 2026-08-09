@@ -93,6 +93,14 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// ---------- Shared chats (in-memory, buat fitur "Bagikan Percakapan") ----------
+const sharedChats = new Map(); // id -> { mode, title, messages, createdAt }
+const MAX_SHARED = 500;
+
+function generateShareId() {
+  return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+}
+
 // ---------- Info publik (buat frontend) ----------
 app.get('/api/info', (req, res) => {
   res.json({
@@ -196,6 +204,46 @@ app.post('/api/chat', async (req, res) => {
       res.end();
     }
   }
+});
+
+// ---------- Endpoint: buat link share ----------
+app.post('/api/share', (req, res) => {
+  const { mode, title, messages } = req.body || {};
+  if (!Array.isArray(messages) || !messages.length) {
+    return res.status(400).json({ error: 'Belum ada percakapan untuk dibagikan.' });
+  }
+  const safeMessages = messages
+    .slice(-50)
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+
+  if (!safeMessages.length) {
+    return res.status(400).json({ error: 'Belum ada percakapan untuk dibagikan.' });
+  }
+
+  if (sharedChats.size >= MAX_SHARED) {
+    const oldestKey = sharedChats.keys().next().value;
+    sharedChats.delete(oldestKey);
+  }
+
+  const id = generateShareId();
+  sharedChats.set(id, {
+    mode: MODELS[mode] ? mode : 'otak',
+    title: (title || 'Percakapan Oxxolot').slice(0, 80),
+    messages: safeMessages,
+    createdAt: Date.now()
+  });
+  res.json({ id });
+});
+
+app.get('/api/share/:id', (req, res) => {
+  const data = sharedChats.get(req.params.id);
+  if (!data) return res.status(404).json({ error: 'Percakapan tidak ditemukan atau sudah kadaluarsa.' });
+  res.json({ ...data, botName: BOT_NAME });
+});
+
+app.get('/share/:id', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'share.html'));
 });
 
 app.listen(PORT, () => {

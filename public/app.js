@@ -9,6 +9,7 @@
     app: document.getElementById('app'),
     menuBtn: document.getElementById('menuBtn'),
     scrim: document.getElementById('sidebarScrim'),
+    shareBtn: document.getElementById('shareBtn'),
     newChatBtn: document.getElementById('newChatBtn'),
     sessionList: document.getElementById('sessionList'),
     clearAllBtn: document.getElementById('clearAllBtn'),
@@ -147,6 +148,35 @@
     s.messages = [];
     saveSessions();
     renderMessages();
+  });
+
+  el.shareBtn.addEventListener('click', async () => {
+    const s = getSession(currentId);
+    if (!s || !s.messages.length) {
+      alert('Belum ada percakapan untuk dibagikan di obrolan ini.');
+      return;
+    }
+    el.shareBtn.disabled = true;
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          title: s.title,
+          messages: s.messages.map((m) => ({ role: m.role, content: m.content }))
+        })
+      });
+      if (!res.ok) throw new Error('Gagal membuat link.');
+      const { id } = await res.json();
+      const url = `${location.origin}/share/${id}`;
+      try { await navigator.clipboard.writeText(url); } catch { /* clipboard mungkin gak didukung */ }
+      alert(`Link percakapan dibuat!\n\n${url}\n\n(Sudah disalin ke clipboard kalau browser mendukung)`);
+    } catch (err) {
+      alert(`Gagal membuat link share: ${err.message}`);
+    } finally {
+      el.shareBtn.disabled = false;
+    }
   });
 
   // ---------- composer ----------
